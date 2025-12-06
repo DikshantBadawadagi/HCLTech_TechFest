@@ -9,8 +9,8 @@ librosa
 soundfile
 numpy
 pandas
-sentence-transformers
-torch==2.2.0+cpu -f https://download.pytorch.org/whl/cpu
+sentence-transformers==2.2.2
+huggingface_hub==0.13.4
 openai-whisper
 transformers
 tqdm
