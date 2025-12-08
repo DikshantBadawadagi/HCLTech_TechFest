@@ -2,14 +2,21 @@
 
 # services:
 #   api:
-#     build: ./backend
+#     build:
+#       context: ./backend
+#       dockerfile: Dockerfile
 #     container_name: teacher-api
 #     restart: always
+
 #     volumes:
-#       - ./backend/app:/app/app 
-#       - ./data:/app/data
+#       - ./backend/app:/app/app             # Your FastAPI code
+#       - ./backend/data:/app/data           # Data folder with uploads
+#       - model-cache:/root/.cache           # Whisper + HuggingFace persistent cache
+
+
 #     ports:
 #       - "8000:8000"
+
 #     depends_on:
 #       - mongo
 
@@ -40,7 +47,7 @@
 
 # volumes:
 #   mongo-data:
-
+#   model-cache:
 
 version: "3.9"
 
@@ -51,12 +58,27 @@ services:
       dockerfile: Dockerfile
     container_name: teacher-api
     restart: always
+    
+    # ADD THIS: Load environment variables from .env file
+    env_file:
+      - ./backend/.env
+    
+    # OR use environment variables directly
+    environment:
+      - MONGO_URI=mongodb://admin:admin123@mongo:27017/
+      - DB_NAME=teacher_analysis
+      - UPLOAD_FOLDER=/app/data/uploads
+      - WHISPER_MODEL=tiny
+      - SENTENCE_TRANSFORMER_MODEL=all-MiniLM-L6-v2
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash-latest}
+      - KEYFRAME_INTERVAL=60
+      - ENABLE_PARALLEL_PROCESSING=true
 
     volumes:
       - ./backend/app:/app/app             # Your FastAPI code
       - ./backend/data:/app/data           # Data folder with uploads
       - model-cache:/root/.cache           # Whisper + HuggingFace persistent cache
-
 
     ports:
       - "8000:8000"

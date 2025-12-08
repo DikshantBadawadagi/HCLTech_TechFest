@@ -1,10 +1,40 @@
+# fastapi
+# uvicorn[standard]
+# pydantic
+# pydantic-settings
+# python-multipart
+# pymongo
+# motor
+# ffmpeg-python
+# opencv-python-headless
+# librosa
+# soundfile
+# numpy
+# pandas
+# sentence-transformers==2.2.2
+# huggingface_hub==0.13.4
+# openai-whisper
+# transformers
+# tqdm
+# mediapipe==0.10.14
+# pytesseract
+# Pillow
+# scikit-learn
+# scipy
+# python-dotenv
+# aiofiles
+# redis
+# celery
+
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
+pydantic-settings
 python-multipart
 pymongo
+motor
 ffmpeg-python
-opencv-python
+opencv-python-headless
 librosa
 soundfile
 numpy
@@ -14,3 +44,13 @@ huggingface_hub==0.13.4
 openai-whisper
 transformers
 tqdm
+mediapipe==0.10.14
+pytesseract
+Pillow
+scikit-learn
+scipy
+python-dotenv
+aiofiles
+redis
+celery
+google-generativeai

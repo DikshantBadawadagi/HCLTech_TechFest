@@ -9,15 +9,7 @@ model = whisper.load_model("base")
 
 
 def extract_audio(video_path):
-    # If the provided path is already an audio file, just return it.
-    lower = video_path.lower()
-    if lower.endswith(('.wav', '.mp3', '.m4a', '.flac', '.aac', '.ogg')):
-        print("DEBUG: input is already audio, skipping extraction:", video_path)
-        return video_path
-
-    # Ensure we always produce a distinct output filename
-    base, _ = os.path.splitext(video_path)
-    audio_output = f"{base}_audio.wav"
+    audio_output = video_path.replace(".mp4", "_audio.wav")
 
     print("DEBUG: Extracting audio from:", video_path)
     print("DEBUG: Exists =", os.path.exists(video_path))
@@ -31,14 +23,8 @@ def extract_audio(video_path):
             .run(capture_stdout=True, capture_stderr=True)
         )
     except ffmpeg.Error as e:
-        try:
-            print("FFMPEG STDOUT:", e.stdout.decode())
-        except Exception:
-            pass
-        try:
-            print("FFMPEG STDERR:", e.stderr.decode())
-        except Exception:
-            pass
+        print("FFMPEG STDOUT:", e.stdout.decode())
+        print("FFMPEG STDERR:", e.stderr.decode())
         raise Exception("FFmpeg failed to extract audio")
 
     return audio_output
