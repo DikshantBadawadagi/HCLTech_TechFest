@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: teacher-video-analysis-api
+    runtime: docker
+
+    buildCommand: ""  # Not used for Docker runtime
+    startCommand: ""  # Not used for Docker runtime
+
+    dockerfilePath: ./backend/Dockerfile.render
+    dockerContext: ./backend
+
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: DB_NAME
+        value: teacher_analysis
+      - key: UPLOAD_FOLDER
+        value: /app/data/uploads
+      - key: WHISPER_MODEL
+        value: tiny
+      - key: SENTENCE_TRANSFORMER_MODEL
+        value: all-MiniLM-L6-v2
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash-exp
+      - key: KEYFRAME_INTERVAL
+        value: "60"
+      - key: ENABLE_PARALLEL_PROCESSING
+        value: "true"
+
+    disk:
+      name: video-uploads
+      mountPath: /app/data/uploads
+      sizeGB: 10
+
+    healthCheckPath: /health
+
+    autoDeploy: true
