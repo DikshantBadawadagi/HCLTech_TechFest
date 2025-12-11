@@ -1,0 +1,33 @@
+FROM python:3.10-slim
+
+# System dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libgl1 \
+    libglib2.0-0 \
+    tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --upgrade pip setuptools wheel
+RUN pip install numpy --no-cache-dir
+RUN pip install torch==2.2.0 --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --force-reinstall numpy --no-cache-dir
+
+# Copy application code
+COPY app/ /app/app/
+
+# Create uploads directory
+RUN mkdir -p /app/data/uploads
+
+# Expose port (Render uses PORT environment variable)
+EXPOSE 8000
+
+# Run with uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

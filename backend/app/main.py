@@ -177,13 +177,18 @@
 # app.include_router(video_routes.router, prefix="/api/v1", tags=["Videos"])
 # app.include_router(analysis_routes.router, prefix="/api/v1", tags=["Analysis"])
 
+# # Import batch routes
+# from app.views import batch_routes
+# app.include_router(batch_routes.router, prefix="/api/v1/batch", tags=["Batch Analysis"])
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
-from app.views import video_routes, analysis_routes
+from app.views import video_routes, analysis_routes, batch_routes
 from app.utils.db_helper import connect_to_mongo, close_mongo_connection
 from app.core.exceptions import VideoAnalysisException
+from app.views import simple_analysis_routes
 
 # Configure logging
 logging.basicConfig(
@@ -194,8 +199,97 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Teacher Video Analysis API",
-    description="Analyze teaching videos for engagement, communication, and technical depth",
-    version="1.0.0"
+    description="""
+# 🎓 Teacher Video Analysis Platform
+
+Comprehensive AI-powered analysis of teaching videos using cutting-edge ML models.
+
+## 🎯 Features
+
+### 1. Single Video Analysis
+- **Complete Analysis** with Gemini AI technical depth evaluation
+- Analyzes: Communication, Engagement, Technical Depth, Clarity, Interaction
+- Processing time: 60-120 seconds per video
+- **Endpoint:** `/api/v1/analyze`
+
+### 2. Batch Analysis (Parallel Processing)
+- **Process multiple video chunks simultaneously**
+- 3x faster than sequential processing
+- No Gemini API (avoids rate limits)
+- Analyzes: Communication, Engagement, Clarity, Interaction
+- **Endpoint:** `/api/v1/batch/analyze-batch`
+
+## 🔬 Analysis Metrics
+
+### Communication (20%)
+- Speaking rate (words per minute)
+- Pause patterns and duration
+- Stuttering detection
+- Volume and pitch dynamics
+
+### Engagement (20%)
+- Q&A pair detection
+- Question frequency
+- Interactive moments
+- Rhetorical questions
+- Direct audience address
+
+### Technical Depth (30%) - *Single video only*
+- **Powered by Google Gemini AI**
+- Domain detection (CS, Business, Finance, Math, Science)
+- Concept coverage and correctness
+- Technical terminology analysis
+- Context-aware evaluation
+
+### Clarity (20%)
+- Video quality assessment
+- Audio quality metrics
+- Eye contact percentage
+- Energy and pitch variation
+
+### Interaction (10%)
+- Eye contact duration
+- Gesture frequency
+- Pose stability analysis
+
+## 🚀 Technology Stack
+
+- **Speech Recognition:** OpenAI Whisper
+- **Audio Analysis:** Librosa
+- **Visual Analysis:** MediaPipe, OpenCV
+- **NLP:** Sentence Transformers
+- **AI Evaluation:** Google Gemini 2.0
+- **OCR:** Tesseract
+
+## 📊 Response Format
+
+All endpoints return comprehensive JSON with:
+- Detailed metrics for each category
+- Individual scores (0-100)
+- Overall weighted score
+- Full transcript with confidence
+- Processing time and metadata
+
+## 🔐 Rate Limits
+
+- Single video: No limit (Gemini included)
+- Batch processing: No Gemini (avoids API rate limits)
+- Max 20 chunks per batch request
+
+## 📖 Documentation
+
+- **Swagger UI:** `/docs` (you are here!)
+- **ReDoc:** `/redoc`
+- **OpenAPI JSON:** `/openapi.json`
+    """,
+    version="2.0.0",
+    contact={
+        "name": "Teacher Analysis API",
+        "email": "support@example.com"
+    },
+    license_info={
+        "name": "MIT License"
+    }
 )
 
 # CORS middleware
@@ -227,21 +321,35 @@ async def video_analysis_exception_handler(request: Request, exc: VideoAnalysisE
     )
 
 # Health check
-@app.get("/")
+@app.get("/", tags=["Health"])
 async def root():
+    """Root endpoint - API status"""
     return {
         "status": "healthy",
         "service": "Teacher Video Analysis API",
-        "version": "1.0.0"
+        "version": "2.0.0",
+        "docs": "/docs",
+        "endpoints": {
+            "single_video": "/api/v1/analyze",
+            "batch_processing": "/api/v1/batch/analyze-batch",
+            "configuration": "/config",
+            "test_gemini": "/test-gemini"
+        }
     }
 
-@app.get("/health")
+@app.get("/health", tags=["Health"])
 async def health_check():
-    return {"status": "ok"}
+    """Health check endpoint"""
+    return {"status": "ok", "service": "running"}
 
-@app.get("/config")
+@app.get("/config", tags=["Configuration"])
 async def get_config():
-    """Check current configuration"""
+    """
+    Check current system configuration
+    
+    Returns:
+        Configuration details including Gemini status, models, and performance settings
+    """
     from app.config import settings
     from app.services.gemini_service import GeminiService
     
@@ -300,9 +408,14 @@ async def get_config():
     
     return config_info
 
-@app.get("/test-gemini")
+@app.get("/test-gemini", tags=["Configuration"])
 async def test_gemini():
-    """Test Gemini API connection"""
+    """
+    Test Gemini API connection with sample analysis
+    
+    Returns:
+        Success/failure status with test results
+    """
     from app.services.gemini_service import GeminiService
     from app.config import settings
     
@@ -354,8 +467,6 @@ async def test_gemini():
 
 # Include routers
 app.include_router(video_routes.router, prefix="/api/v1", tags=["Videos"])
-app.include_router(analysis_routes.router, prefix="/api/v1", tags=["Analysis"])
-
-# Import batch routes
-from app.views import batch_routes
-app.include_router(batch_routes.router, prefix="/api/v1/batch", tags=["Batch Analysis"])
+app.include_router(analysis_routes.router, prefix="/api/v1", tags=["Single Video Analysis"])
+app.include_router(batch_routes.router, prefix="/api/v1/batch", tags=["Batch Analysis (Parallel)"])
+app.include_router(simple_analysis_routes.router, prefix="/api/v1", tags=["Single Video Analysis"])

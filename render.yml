@@ -1,0 +1,40 @@
+services:
+  # FastAPI Backend
+  - type: web
+    name: teacher-video-analysis-api
+    env: docker
+    dockerfilePath: ./backend/Dockerfile.render
+    dockerContext: ./backend
+    
+    # Environment variables
+    envVars:
+      - key: MONGO_URI
+        sync: false  # You'll set this manually
+      - key: DB_NAME
+        value: teacher_analysis
+      - key: UPLOAD_FOLDER
+        value: /app/data/uploads
+      - key: WHISPER_MODEL
+        value: tiny
+      - key: SENTENCE_TRANSFORMER_MODEL
+        value: all-MiniLM-L6-v2
+      - key: GEMINI_API_KEY
+        sync: false  # You'll set this manually
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash-exp
+      - key: KEYFRAME_INTERVAL
+        value: 60
+      - key: ENABLE_PARALLEL_PROCESSING
+        value: true
+    
+    # Persistent disk for video uploads
+    disk:
+      name: video-uploads
+      mountPath: /app/data/uploads
+      sizeGB: 10  # 10GB free tier
+    
+    # Health check
+    healthCheckPath: /health
+    
+    # Auto-deploy
+    autoDeploy: true
