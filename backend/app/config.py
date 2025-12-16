@@ -33,6 +33,7 @@
 
 from pydantic_settings import BaseSettings
 from typing import Optional
+import os
 
 class Settings(BaseSettings):
     # MongoDB
@@ -52,6 +53,12 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""  # Set via environment variable
     GEMINI_MODEL: str = "gemini-1.5-flash"  # Fast and efficient
     
+    # Groq Whisper API (Cloud-based Speech-to-Text with fallback)
+    GROQ_API_KEY: str = ""  # Set via environment variable
+    GROQ_WHISPER_MODEL: str = "whisper-large-v3"  # Larger model for better accuracy
+    USE_GROQ_WHISPER: bool = True  # Enable Groq Whisper (falls back to local if disabled)
+    GROQ_REQUEST_TIMEOUT: int = 60  # Timeout in seconds
+    
     # Processing
     KEYFRAME_INTERVAL: int = 60  # Changed from 30 to 60 (half the frames)
     AUDIO_SAMPLE_RATE: int = 16000
@@ -68,6 +75,9 @@ class Settings(BaseSettings):
     MAX_VIDEO_DURATION: int = 3600  # 1 hour max
     
     class Config:
-        env_file = ".env"
+        # In Docker: env_file from docker-compose is injected as environment variables
+        # In local dev: load from .env file if it exists
+        env_file = ".env" if os.path.exists(".env") else None
+        case_sensitive = False
 
 settings = Settings()

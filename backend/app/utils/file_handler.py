@@ -6,6 +6,9 @@ import uuid
 import aiofiles
 import cv2
 import logging
+import httpx
+from urllib.parse import urlparse
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +63,89 @@ class FileHandler:
         except Exception as e:
             logger.error(f"Error saving file: {e}")
             raise VideoUploadException(f"Failed to save file: {str(e)}")
+    
+    async def download_from_url(self, url: str, timeout: int = 300) -> str:
+        """
+        Download video from URL (S3, Cloudinary, etc.)
+        
+        Args:
+            url: Direct URL to video file
+            timeout: Download timeout in seconds
+        
+        Returns:
+            Local file path to downloaded video
+        """
+        try:
+            logger.info(f"📥 Downloading video from URL: {url[:80]}...")
+            
+            # Validate URL
+            parsed_url = urlparse(url)
+            if not parsed_url.scheme or not parsed_url.netloc:
+                raise VideoUploadException("Invalid URL provided", status_code=400)
+            
+            # Get filename from URL or generate one
+            url_filename = os.path.basename(parsed_url.path)
+            if not url_filename or not any(url_filename.endswith(ext) for ext in settings.ALLOWED_EXTENSIONS):
+                # Generate filename with .mp4 extension
+                url_filename = f"{uuid.uuid4()}.mp4"
+            else:
+                # Validate extension
+                file_ext = os.path.splitext(url_filename)[1].lower()
+                if file_ext not in settings.ALLOWED_EXTENSIONS:
+                    raise VideoUploadException(
+                        f"Invalid file type from URL. Allowed: {settings.ALLOWED_EXTENSIONS}",
+                        status_code=400
+                    )
+            
+            # Download file
+            unique_filename = f"{uuid.uuid4()}_{url_filename}"
+            file_path = os.path.join(self.upload_folder, unique_filename)
+            
+            downloaded_size = 0
+            
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                async with client.stream('GET', url) as response:
+                    response.raise_for_status()
+                    
+                    # Get content length
+                    content_length = int(response.headers.get('content-length', 0))
+                    if content_length > settings.MAX_VIDEO_SIZE:
+                        raise VideoUploadException(
+                            f"URL file too large. Max: {settings.MAX_VIDEO_SIZE / (1024*1024):.0f}MB, Got: {content_length / (1024*1024):.0f}MB",
+                            status_code=413
+                        )
+                    
+                    # Download with chunking
+                    async with aiofiles.open(file_path, 'wb') as out_file:
+                        async for chunk in response.aiter_bytes(chunk_size=1024*1024):  # 1MB chunks
+                            downloaded_size += len(chunk)
+                            
+                            # Safety check during download
+                            if downloaded_size > settings.MAX_VIDEO_SIZE:
+                                os.remove(file_path)
+                                raise VideoUploadException(
+                                    f"File exceeded max size during download",
+                                    status_code=413
+                                )
+                            
+                            await out_file.write(chunk)
+            
+            logger.info(f"✅ Downloaded: {file_path} ({downloaded_size / (1024*1024):.2f}MB)")
+            return file_path
+        
+        except VideoUploadException:
+            raise
+        except httpx.TimeoutException:
+            logger.error(f"Download timeout for URL: {url}")
+            raise VideoUploadException("Download timeout - URL took too long to respond", status_code=408)
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error downloading URL: {e}")
+            raise VideoUploadException(f"Failed to download from URL: {str(e)}", status_code=400)
+        except Exception as e:
+            logger.error(f"Error downloading from URL: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise VideoUploadException(f"Failed to download file: {str(e)}")
     
     def get_video_duration(self, file_path: str) -> float:
         """Get video duration in seconds"""

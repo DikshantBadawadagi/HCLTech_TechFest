@@ -1,5 +1,5 @@
 from fastapi import UploadFile
-from typing import List
+from typing import List, Dict, Optional
 import logging
 import time
 from datetime import datetime
@@ -22,14 +22,16 @@ class BatchController:
     
     async def process_batch(
         self, 
-        files: List[UploadFile],
+        files: List[UploadFile] = None,
+        urls: List[str] = None,
         context: str = None
     ) -> BatchAnalysisResponse:
         """
-        Process multiple video chunks in parallel
+        Process multiple video chunks in parallel (from files or URLs)
         
         Args:
             files: List of uploaded video files
+            urls: List of video URLs (S3, Cloudinary, etc.)
             context: Optional context for all chunks
         
         Returns:
@@ -38,13 +40,27 @@ class BatchController:
         batch_id = str(uuid.uuid4())
         start_time = time.time()
         
+        # Validate inputs
+        if not files and not urls:
+            raise VideoUploadException("Either files or URLs must be provided", status_code=400)
+        
+        if not files:
+            files = []
+        if not urls:
+            urls = []
+        
+        total_chunks = len(files) + len(urls)
+        
         logger.info(f"📦 Starting batch analysis: {batch_id}")
-        logger.info(f"   Total files: {len(files)}")
+        logger.info(f"   Files: {len(files)}")
+        logger.info(f"   URLs: {len(urls)}")
+        logger.info(f"   Total chunks: {total_chunks}")
         
         try:
-            # Step 1: Upload and validate all chunks
-            logger.info("Step 1: Uploading all chunks...")
+            # Step 1: Upload and validate all chunks (files + download URLs)
+            logger.info("Step 1: Processing all chunks (uploading + downloading)...")
             chunks = await self._upload_all_chunks(files)
+            chunks.extend(await self._download_all_urls(urls))
             
             # Step 2: Process all chunks in parallel
             logger.info("Step 2: Processing chunks in parallel...")
@@ -69,7 +85,7 @@ class BatchController:
             
             response = BatchAnalysisResponse(
                 batch_id=batch_id,
-                total_chunks=len(files),
+                total_chunks=len(files) + len(urls),
                 successful_chunks=successful,
                 failed_chunks=failed,
                 status=status,
@@ -82,7 +98,7 @@ class BatchController:
             
             logger.info(f"✅ Batch analysis completed: {batch_id}")
             logger.info(f"   Total time: {total_time:.2f}s")
-            logger.info(f"   Success: {successful}/{len(files)}")
+            logger.info(f"   Success: {successful}/{total_chunks}")
             
             return response
         
@@ -91,12 +107,14 @@ class BatchController:
             raise
     
     async def _upload_all_chunks(self, files: List[UploadFile]) -> List[dict]:
-        """Upload all chunks and get metadata"""
+        """Upload all file chunks and get metadata"""
         chunks = []
         db = get_database()
         
         for i, file in enumerate(files):
             try:
+                logger.info(f"   Uploading file {i+1}/{len(files)}: {file.filename}")
+                
                 # Validate file
                 self.file_handler.validate_video_file(file)
                 
@@ -116,7 +134,8 @@ class BatchController:
                     "duration": duration,
                     "status": "processing",
                     "uploaded_at": datetime.utcnow(),
-                    "batch_processing": True
+                    "batch_processing": True,
+                    "source_type": "upload"
                 }
                 
                 result = await db.videos.insert_one(video_doc)
@@ -130,7 +149,8 @@ class BatchController:
                     "video_path": file_path,
                     "filename": file.filename,
                     "size": file_size,
-                    "duration": duration
+                    "duration": duration,
+                    "source_type": "upload"
                 })
                 
                 logger.info(f"   ✅ Uploaded {chunk_id}: {file.filename}")
@@ -138,6 +158,61 @@ class BatchController:
             except Exception as e:
                 logger.error(f"   ❌ Failed to upload chunk {i+1}: {e}")
                 raise VideoUploadException(f"Failed to upload chunk {i+1}: {str(e)}")
+        
+        return chunks
+    
+    async def _download_all_urls(self, urls: List[str]) -> List[dict]:
+        """Download all URL chunks and get metadata"""
+        chunks = []
+        db = get_database()
+        
+        for i, url in enumerate(urls):
+            try:
+                logger.info(f"   Downloading URL {i+1}/{len(urls)}: {url[:80]}...")
+                
+                # Download file
+                file_path = await self.file_handler.download_from_url(url)
+                
+                # Get metadata
+                duration = self.file_handler.get_video_duration(file_path)
+                import os
+                file_size = os.path.getsize(file_path)
+                filename = os.path.basename(file_path)
+                
+                # Save to database
+                video_doc = {
+                    "filename": filename,
+                    "file_path": file_path,
+                    "size": file_size,
+                    "duration": duration,
+                    "status": "processing",
+                    "uploaded_at": datetime.utcnow(),
+                    "batch_processing": True,
+                    "source_type": "url",
+                    "source_url": url
+                }
+                
+                result = await db.videos.insert_one(video_doc)
+                video_id = str(result.inserted_id)
+                
+                chunk_id = f"chunk_url_{i+1}"
+                
+                chunks.append({
+                    "chunk_id": chunk_id,
+                    "video_id": video_id,
+                    "video_path": file_path,
+                    "filename": filename,
+                    "size": file_size,
+                    "duration": duration,
+                    "source_type": "url",
+                    "source_url": url
+                })
+                
+                logger.info(f"   ✅ Downloaded {chunk_id}: {filename}")
+            
+            except Exception as e:
+                logger.error(f"   ❌ Failed to download URL {i+1}: {e}")
+                raise VideoUploadException(f"Failed to download from URL: {str(e)}")
         
         return chunks
     

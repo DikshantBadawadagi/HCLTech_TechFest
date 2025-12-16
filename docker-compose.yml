@@ -59,21 +59,11 @@ services:
     container_name: teacher-api
     restart: always
     
-    # ADD THIS: Load environment variables from .env file
+    # Load all environment variables from .env file
+    # Path is relative to docker-compose.yml location
+    # .env file is in the same directory as docker-compose.yml
     env_file:
-      - ./backend/.env
-    
-    # OR use environment variables directly
-    environment:
-      - MONGO_URI=mongodb://admin:admin123@mongo:27017/
-      - DB_NAME=teacher_analysis
-      - UPLOAD_FOLDER=/app/data/uploads
-      - WHISPER_MODEL=tiny
-      - SENTENCE_TRANSFORMER_MODEL=all-MiniLM-L6-v2
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash-latest}
-      - KEYFRAME_INTERVAL=60
-      - ENABLE_PARALLEL_PROCESSING=true
+      - ./.env
 
     volumes:
       - ./backend/app:/app/app             # Your FastAPI code

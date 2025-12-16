@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 from app.models.schemas import (
@@ -10,9 +10,14 @@ class ChunkUpload(BaseModel):
     chunk_id: str
     # File will be uploaded via multipart form data
 
+class ChunkUrl(BaseModel):
+    """Single chunk from URL (S3, Cloudinary, etc.)"""
+    chunk_id: str
+    url: str = Field(..., description="Direct URL to video file (S3, Cloudinary, etc.)")
+
 class BatchAnalysisRequest(BaseModel):
     """Request for batch analysis"""
-    context: Optional[str] = None  # Optional context for all chunks
+    context: Optional[str] = Field(None, description="Optional context for all chunks")
 
 class ChunkAnalysisResult(BaseModel):
     """Analysis result for a single chunk"""
@@ -21,6 +26,8 @@ class ChunkAnalysisResult(BaseModel):
     filename: str
     duration: float
     size: int
+    source_type: str  # "upload" or "url"
+    source_url: Optional[str] = None  # Original URL if downloaded from URL
     
     # Analysis results
     transcript: str

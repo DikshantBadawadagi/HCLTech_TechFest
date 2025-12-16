@@ -17,6 +17,7 @@ RUN pip install --upgrade pip setuptools wheel
 
 RUN pip install numpy --no-cache-dir
 
+# Note: PyTorch restored as fallback for local Whisper if Groq fails
 RUN pip install torch==2.2.0 --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
 
 RUN pip install --no-cache-dir -r requirements.txt

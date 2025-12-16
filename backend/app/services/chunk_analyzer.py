@@ -33,18 +33,27 @@ class ChunkAnalyzer:
         start_time = time.time()
         
         try:
-            logger.info(f"[Chunk {chunk_id}] Starting analysis")
+            logger.info(f"[Chunk {chunk_id}] 🎬 Starting analysis")
+            logger.info(f"[Chunk {chunk_id}] Video path: {video_path}")
             
             # Step 1: Extract audio and keyframes
-            logger.info(f"[Chunk {chunk_id}] Extracting audio/keyframes")
+            logger.info(f"[Chunk {chunk_id}] 📊 Extracting audio/keyframes...")
+            step1_start = time.time()
             audio_path, keyframes = await self.video_processor.process_video(video_path)
+            step1_time = time.time() - step1_start
+            logger.info(f"[Chunk {chunk_id}]    ✅ Extraction complete ({step1_time:.2f}s)")
             
             # Step 2: Transcribe audio (slowest operation)
-            logger.info(f"[Chunk {chunk_id}] Transcribing...")
+            logger.info(f"[Chunk {chunk_id}] 🎤 Starting transcription...")
+            step2_start = time.time()
             transcript, confidence = await self.speech_service.transcribe(audio_path)
+            step2_time = time.time() - step2_start
+            logger.info(f"[Chunk {chunk_id}]    ✅ Transcription complete ({step2_time:.2f}s)")
+            logger.info(f"[Chunk {chunk_id}]    📝 Transcript length: {len(transcript)} chars, Confidence: {confidence}")
             
             # Step 3: Run parallel analysis (audio, NLP, visual)
-            logger.info(f"[Chunk {chunk_id}] Running parallel analysis")
+            logger.info(f"[Chunk {chunk_id}] 🔬 Running parallel analysis (audio, NLP, visual)...")
+            step3_start = time.time()
             
             results = await asyncio.gather(
                 self.audio_service.analyze_audio(audio_path, transcript),
@@ -52,6 +61,8 @@ class ChunkAnalyzer:
                 self.visual_service.analyze_video(video_path),
                 return_exceptions=True
             )
+            
+            step3_time = time.time() - step3_start
             
             audio_metrics = results[0] if not isinstance(results[0], Exception) else self._default_audio_metrics()
             engagement_data = results[1] if not isinstance(results[1], Exception) else self._default_engagement()
@@ -62,18 +73,29 @@ class ChunkAnalyzer:
                 if isinstance(result, Exception):
                     logger.error(f"[Chunk {chunk_id}] Analysis task {i} failed: {result}")
             
+            logger.info(f"[Chunk {chunk_id}]    ✅ Parallel analysis complete ({step3_time:.2f}s)")
+            
             # Step 4: Calculate scores (no technical depth)
-            logger.info(f"[Chunk {chunk_id}] Calculating scores")
+            logger.info(f"[Chunk {chunk_id}] 📈 Calculating scores...")
+            step4_start = time.time()
             scores = self._calculate_chunk_scores(
                 audio_metrics, 
                 engagement_data, 
                 visual_data, 
                 transcript
             )
+            step4_time = time.time() - step4_start
             
             processing_time = time.time() - start_time
             
-            logger.info(f"[Chunk {chunk_id}] ✅ Completed in {processing_time:.2f}s")
+            # Log timing breakdown
+            logger.info(f"[Chunk {chunk_id}] ✅ COMPLETED in {processing_time:.2f}s")
+            logger.info(f"[Chunk {chunk_id}]    Breakdown:")
+            logger.info(f"[Chunk {chunk_id}]    - Extract audio/keyframes: {step1_time:.2f}s")
+            logger.info(f"[Chunk {chunk_id}]    - Transcription: {step2_time:.2f}s ({(step2_time/processing_time)*100:.1f}%)")
+            logger.info(f"[Chunk {chunk_id}]    - Parallel analysis: {step3_time:.2f}s")
+            logger.info(f"[Chunk {chunk_id}]    - Score calculation: {step4_time:.2f}s")
+            logger.info(f"[Chunk {chunk_id}]    Overall score: {scores.get('overall', 0):.2f}")
             
             return {
                 "status": "success",

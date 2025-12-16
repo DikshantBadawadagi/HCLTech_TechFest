@@ -3,6 +3,7 @@ import asyncio
 import time
 from typing import List, Dict
 from concurrent.futures import ProcessPoolExecutor
+from io import StringIO
 from app.services.chunk_analyzer import ChunkAnalyzer
 from app.models.batch_schemas import ChunkAnalysisResult
 from app.models.schemas import CommunicationMetrics, EngagementMetrics, ClarityMetrics, InteractionMetrics
@@ -13,8 +14,27 @@ def analyze_chunk_worker(chunk: Dict) -> Dict:
     """
     Worker function to analyze a single chunk in a separate process
     This avoids Whisper thread-safety issues
+    Captures child process logs and returns them in result
     """
     import asyncio
+    import logging
+    from io import StringIO
+    
+    # Capture logs from this process - but ONLY from app.* loggers
+    log_capture = StringIO()
+    handler = logging.StreamHandler(log_capture)
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    handler.setLevel(logging.INFO)  # Only INFO and above
+    
+    # Get app logger and add our handler
+    app_logger = logging.getLogger('app')
+    app_logger.addHandler(handler)
+    app_logger.setLevel(logging.INFO)
+    
+    # Suppress noisy library loggers
+    logging.getLogger('tensorflow').setLevel(logging.WARNING)
+    logging.getLogger('google.protobuf').setLevel(logging.WARNING)
+    logging.getLogger('numba').setLevel(logging.WARNING)
     
     # Create new event loop for this process
     loop = asyncio.new_event_loop()
@@ -28,9 +48,20 @@ def analyze_chunk_worker(chunk: Dict) -> Dict:
                 chunk['chunk_id']
             )
         )
+        # Add captured logs to result
+        result['_child_logs'] = log_capture.getvalue()
         return result
+    except Exception as e:
+        # Still capture logs even on exception
+        return {
+            'status': 'failed',
+            'error': str(e),
+            '_child_logs': log_capture.getvalue()
+        }
     finally:
         loop.close()
+        app_logger.removeHandler(handler)
+        log_capture.close()
 
 class BatchProcessor:
     """
@@ -90,6 +121,15 @@ class BatchProcessor:
             for chunk, future in futures:
                 try:
                     result = await future
+                    
+                    # Log captured child process logs
+                    if '_child_logs' in result:
+                        child_logs = result.pop('_child_logs')
+                        if child_logs.strip():
+                            # Print child logs directly so they appear in docker logs
+                            for line in child_logs.strip().split('\n'):
+                                logger.info(f"[Child Process] {line}")
+                    
                     results.append(self._format_result(chunk, result))
                 except Exception as e:
                     logger.error(f"[Chunk {chunk['chunk_id']}] Process execution failed: {e}")
@@ -172,6 +212,8 @@ class BatchProcessor:
             filename=chunk["filename"],
             duration=chunk["duration"],
             size=chunk["size"],
+            source_type=chunk.get("source_type", "upload"),
+            source_url=chunk.get("source_url"),
             transcript=analysis["transcript"],
             transcript_confidence=analysis["transcript_confidence"],
             communication=communication,
@@ -215,6 +257,8 @@ class BatchProcessor:
             filename=chunk["filename"],
             duration=chunk.get("duration", 0),
             size=chunk.get("size", 0),
+            source_type=chunk.get("source_type", "unknown"),
+            source_url=chunk.get("source_url"),
             transcript="",
             transcript_confidence=0.0,
             communication=default_comm,
