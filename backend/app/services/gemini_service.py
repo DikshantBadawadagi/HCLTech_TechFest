@@ -295,3 +295,140 @@ IMPORTANT:
             'context_provided': False,
             'llm_analysis': None
         }
+    
+    async def extract_key_topics(self, transcript: str) -> list:
+        """
+        Extract key topics and their approximate timestamps from transcript.
+        
+        Returns list of topics with estimated timestamps.
+        """
+        if not self.enabled:
+            return self._extract_topics_fallback(transcript)
+        
+        try:
+            prompt = f"""Analyze this video transcript and extract key topics being discussed.
+For each topic, estimate when it starts (roughly, in seconds).
+
+Assume average speaking rate of ~150 words per minute.
+Count words to estimate timestamps.
+
+Transcript:
+{transcript[:2000]}
+
+Return JSON array with this format:
+[
+  {{"topic": "Topic name", "timestamp_seconds": 0}},
+  {{"topic": "Another topic", "timestamp_seconds": 120}}
+]
+
+Only include 5-10 most important topics. Return ONLY valid JSON."""
+            
+            response = self.model.generate_content(prompt)
+            response_text = response.text.strip()
+            
+            # Extract JSON from response
+            if "```" in response_text:
+                response_text = response_text.split("```")[1]
+                if "json" in response_text:
+                    response_text = response_text.split("json")[1]
+                response_text = response_text.strip()
+            
+            topics = json.loads(response_text)
+            logger.info(f"Extracted {len(topics)} key topics")
+            return topics
+        
+        except Exception as e:
+            logger.error(f"Error extracting topics: {e}")
+            return self._extract_topics_fallback(transcript)
+    
+    def _extract_topics_fallback(self, transcript: str) -> list:
+        """Fallback: extract topics using simple sentence splitting"""
+        sentences = transcript.split('.')
+        topics = []
+        words_count = 0
+        
+        for i, sentence in enumerate(sentences[:15]):
+            if len(sentence.strip()) > 20:
+                words_count += len(sentence.split())
+                timestamp = (words_count / 150) * 60
+                topics.append({
+                    "topic": sentence.strip()[:50],
+                    "timestamp_seconds": int(timestamp)
+                })
+        
+        return topics[:8]
+    
+    async def analyze_frame_relevance(
+        self,
+        frame_path: str,
+        topic: str,
+        timestamp: float
+    ) -> Dict:
+        """
+        Analyze if a frame is relevant to the given topic using vision.
+        
+        Returns: {
+            "relevant": bool,
+            "description": "What's in the frame",
+            "explanation": "How it relates to/differs from topic"
+        }
+        """
+        if not self.enabled:
+            return {
+                "relevant": None,
+                "description": "Analysis unavailable",
+                "explanation": "Gemini not enabled"
+            }
+        
+        try:
+            # Load image
+            import base64
+            with open(frame_path, 'rb') as f:
+                image_data = base64.standard_b64encode(f.read()).decode('utf-8')
+            
+            # Create message with image
+            prompt = f"""Analyze this screenshot from a video.
+
+Topic being discussed: {topic}
+Timestamp in video: {timestamp} seconds
+
+Analyze:
+1. What is actually happening in this frame?
+2. Is it relevant to the topic "{topic}"?
+3. If relevant: How does it support/illustrate the topic?
+4. If irrelevant: Why is it irrelevant or distracting?
+
+Respond ONLY with JSON:
+{{
+  "relevant": true/false,
+  "description": "What you see in the frame (2-3 sentences)",
+  "explanation": "How it relates to the topic (2-3 sentences)"
+}}"""
+            
+            # Send request with image
+            image_part = {
+                "mime_type": "image/jpeg",
+                "data": image_data
+            }
+            
+            response = self.model.generate_content([prompt, image_part])
+            response_text = response.text.strip()
+            
+            # Extract JSON
+            if "```" in response_text:
+                response_text = response_text.split("```")[1]
+                if "json" in response_text:
+                    response_text = response_text.split("json")[1]
+                response_text = response_text.strip()
+            
+            result = json.loads(response_text)
+            logger.info(f"Frame at {timestamp}s - Relevant: {result.get('relevant')}")
+            return result
+        
+        except Exception as e:
+            logger.error(f"Error analyzing frame relevance: {e}")
+            return {
+                "relevant": None,
+                "description": "Error analyzing frame",
+                "explanation": str(e)
+            }

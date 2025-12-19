@@ -189,6 +189,7 @@ from app.views import video_routes, analysis_routes, batch_routes
 from app.utils.db_helper import connect_to_mongo, close_mongo_connection
 from app.core.exceptions import VideoAnalysisException
 from app.views import simple_analysis_routes
+from app.views import topic_relevance_routes
 
 # Configure logging
 logging.basicConfig(
@@ -470,3 +471,4 @@ app.include_router(video_routes.router, prefix="/api/v1", tags=["Videos"])
 app.include_router(analysis_routes.router, prefix="/api/v1", tags=["Single Video Analysis"])
 app.include_router(batch_routes.router, prefix="/api/v1/batch", tags=["Batch Analysis (Parallel)"])
 app.include_router(simple_analysis_routes.router, prefix="/api/v1", tags=["Single Video Analysis"])
+app.include_router(topic_relevance_routes.router, prefix="/api/v1", tags=["Topic Relevance Analysis"])
