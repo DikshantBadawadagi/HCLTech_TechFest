@@ -36,9 +36,19 @@ class VideoProcessor:
     async def extract_audio(self, video_path: str) -> str:
         """Extract audio from video using ffmpeg"""
         try:
+            # First, validate the video file exists and is readable
+            if not os.path.exists(video_path):
+                raise Exception(f"Video file not found: {video_path}")
+            
+            file_size = os.path.getsize(video_path)
+            if file_size == 0:
+                raise Exception(f"Video file is empty (0 bytes): {video_path}")
+            
+            logger.info(f"   📹 Extracting audio from: {video_path} ({file_size} bytes)")
+            
             audio_path = video_path.replace(os.path.splitext(video_path)[1], "_audio.wav")
             
-            # Use ffmpeg to extract audio
+            # Use ffmpeg to extract audio with better error capture
             stream = ffmpeg.input(video_path)
             stream = ffmpeg.output(
                 stream, 
@@ -47,9 +57,18 @@ class VideoProcessor:
                 ac=1,  # Mono
                 format='wav'
             )
-            ffmpeg.run(stream, overwrite_output=True, quiet=True)
             
-            logger.info(f"Audio extracted: {audio_path}")
+            try:
+                ffmpeg.run(stream, overwrite_output=True, quiet=False, capture_stdout=True, capture_stderr=True)
+            except ffmpeg.Error as e:
+                logger.error(f"   ❌ FFmpeg error output: {e.stderr.decode('utf-8') if e.stderr else 'No stderr'}")
+                raise Exception(f"FFmpeg audio extraction failed: {e.stderr.decode('utf-8') if e.stderr else str(e)}")
+            
+            if not os.path.exists(audio_path):
+                raise Exception(f"Audio file was not created: {audio_path}")
+            
+            audio_size = os.path.getsize(audio_path)
+            logger.info(f"   ✅ Audio extracted successfully: {audio_path} ({audio_size} bytes)")
             return audio_path
         
         except Exception as e:

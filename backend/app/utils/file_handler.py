@@ -130,7 +130,35 @@ class FileHandler:
                             
                             await out_file.write(chunk)
             
-            logger.info(f"✅ Downloaded: {file_path} ({downloaded_size / (1024*1024):.2f}MB)")
+            # Validate downloaded file
+            if not os.path.exists(file_path):
+                raise Exception("Downloaded file not found")
+            
+            final_size = os.path.getsize(file_path)
+            if final_size == 0:
+                os.remove(file_path)
+                raise Exception("Downloaded file is empty (0 bytes) - incomplete download")
+            
+            logger.info(f"✅ Downloaded: {file_path} ({final_size / (1024*1024):.2f}MB)")
+            
+            # Quick validation - ensure it's a valid video file
+            try:
+                import cv2
+                cap = cv2.VideoCapture(file_path)
+                frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                cap.release()
+                
+                if frame_count == 0 or fps == 0:
+                    os.remove(file_path)
+                    raise Exception(f"Invalid video file: {frame_count} frames, {fps} fps")
+                
+                logger.info(f"   ✅ Video validation passed: {frame_count} frames @ {fps} fps")
+            except Exception as e:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                raise Exception(f"Downloaded file validation failed: {str(e)}")
+            
             return file_path
         
         except VideoUploadException:
