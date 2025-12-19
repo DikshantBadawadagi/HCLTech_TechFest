@@ -8,12 +8,24 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Global model cache to avoid reloading
+_MODEL_CACHE = None
+
 class NLPService:
     """Enhanced NLP analysis with multi-domain support"""
     
     def __init__(self):
-        logger.info(f"Loading sentence transformer: {settings.SENTENCE_TRANSFORMER_MODEL}")
-        self.model = SentenceTransformer(settings.SENTENCE_TRANSFORMER_MODEL)
+        global _MODEL_CACHE
+        
+        # Reuse cached model if available (huge speedup!)
+        if _MODEL_CACHE is not None:
+            logger.info("📦 Using cached sentence transformer model")
+            self.model = _MODEL_CACHE
+        else:
+            logger.info(f"Loading sentence transformer: {settings.SENTENCE_TRANSFORMER_MODEL}")
+            self.model = SentenceTransformer(settings.SENTENCE_TRANSFORMER_MODEL)
+            _MODEL_CACHE = self.model
+            logger.info("✅ Model loaded and cached for future use")
         
         # Multi-domain technical keywords
         self.domain_keywords = {
