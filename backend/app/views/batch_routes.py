@@ -293,13 +293,26 @@ async def analyze_batch_urls(
     Analyze multiple videos from cloud URLs in parallel
     """
     try:
-        urls = request_body.get("urls", [])
-        context = request_body.get("context", None)
+        # Extract URLs and context from request body
+        urls = request_body.get("urls") if isinstance(request_body, dict) else None
+        context = request_body.get("context") if isinstance(request_body, dict) else None
+        
+        logger.info(f"🌐 URL batch request received:")
+        logger.info(f"   URLs count: {len(urls) if urls else 0}")
+        logger.info(f"   URLs type: {type(urls)}")
+        logger.info(f"   Context: {context}")
         
         if not urls or len(urls) == 0:
             raise HTTPException(
                 status_code=400,
                 detail="No URLs provided. Please include 'urls' array in request body."
+            )
+        
+        # Ensure urls is a list
+        if not isinstance(urls, list):
+            raise HTTPException(
+                status_code=400,
+                detail="'urls' must be an array of strings"
             )
         
         if len(urls) > 20:
@@ -318,8 +331,12 @@ async def analyze_batch_urls(
     
     except VideoUploadException as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Batch URL analysis failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Batch analysis failed: {str(e)}")
 
 @router.get(

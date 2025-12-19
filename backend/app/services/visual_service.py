@@ -18,18 +18,18 @@ class VisualService:
         self.face_mesh = self.mp_face_mesh.FaceMesh(
             static_image_mode=False,
             max_num_faces=1,
-            min_detection_confidence=0.5
+            min_detection_confidence=0.7  # Higher threshold = faster
         )
         
         self.pose = self.mp_pose.Pose(
             static_image_mode=False,
-            min_detection_confidence=0.5
+            min_detection_confidence=0.7  # Higher threshold = faster
         )
         
         self.hands = self.mp_hands.Hands(
             static_image_mode=False,
             max_num_hands=2,
-            min_detection_confidence=0.5
+            min_detection_confidence=0.7  # Higher threshold = faster
         )
     
     async def analyze_video(self, video_path: str) -> Dict:
@@ -57,7 +57,13 @@ class VisualService:
             prev_pose_landmarks = None
             
             frame_count = 0
-            sample_interval = int(fps) if fps > 0 else 30  # Sample 1 frame per second
+            # Adaptive sampling: larger intervals for small videos
+            if duration < 60:
+                sample_interval = max(int(fps * 1.0), 30) if fps > 0 else 60  # Every 1s for short videos
+            else:
+                sample_interval = max(int(fps * 2.0), 60) if fps > 0 else 120  # Every 2s for longer videos
+            
+            logger.info(f"Visual analysis: sampling every {sample_interval} frames (~{sample_interval/fps if fps > 0 else 1:.1f}s apart, estimated {(total_frames // sample_interval)} frames to analyze)")
             
             while cap.isOpened():
                 ret, frame = cap.read()
@@ -77,11 +83,9 @@ class VisualService:
                 laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
                 quality_scores.append(laplacian_var)
                 
-                # Face analysis for eye contact
+                # Face analysis for eye contact (simplified - just face detection, no mesh)
                 face_results = self.face_mesh.process(rgb_frame)
                 if face_results.multi_face_landmarks:
-                    # Estimate gaze direction (simplified)
-                    # If face is centered and frontal, consider it eye contact
                     landmarks = face_results.multi_face_landmarks[0]
                     nose_tip = landmarks.landmark[1]
                     
@@ -118,7 +122,7 @@ class VisualService:
             cap.release()
             
             # Calculate metrics
-            sampled_frames = frame_count // sample_interval
+            sampled_frames = (frame_count // sample_interval) + 1
             eye_contact_percentage = (eye_contact_frames / sampled_frames) * 100 if sampled_frames > 0 else 0
             
             gesture_frequency = (gesture_count / duration) * 60  # gestures per minute

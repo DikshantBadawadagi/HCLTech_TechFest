@@ -55,6 +55,7 @@ class ChunkAnalyzer:
             logger.info(f"[Chunk {chunk_id}] 🔬 Running parallel analysis (audio, NLP, visual)...")
             step3_start = time.time()
             
+            # Run all tasks in parallel with asyncio.gather
             results = await asyncio.gather(
                 self.audio_service.analyze_audio(audio_path, transcript),
                 self.nlp_service.analyze_engagement(transcript),

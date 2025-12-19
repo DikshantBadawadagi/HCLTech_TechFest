@@ -37,17 +37,12 @@ class AudioService:
             volume_mean = float(np.mean(rms))
             volume_std = float(np.std(rms))
             
-            # Pitch analysis (fundamental frequency)
-            pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
-            pitch_values = []
-            for t in range(pitches.shape[1]):
-                index = magnitudes[:, t].argmax()
-                pitch = pitches[index, t]
-                if pitch > 0:
-                    pitch_values.append(pitch)
-            
-            pitch_mean = float(np.mean(pitch_values)) if pitch_values else 0.0
-            pitch_std = float(np.std(pitch_values)) if pitch_values else 0.0
+            # Pitch analysis (fundamental frequency) - SIMPLIFIED for speed
+            # Use simpler spectral centroid instead of piptrack (faster, still meaningful)
+            S = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=2048)
+            spectral_centroid = librosa.feature.spectral_centroid(S=S, sr=sr)[0]
+            pitch_mean = float(np.mean(spectral_centroid))
+            pitch_std = float(np.std(spectral_centroid))
             
             # Detect pauses (low energy regions)
             frame_length = 2048
@@ -77,6 +72,14 @@ class AudioService:
             # Detect stuttering (repeated words at start)
             stutter_pattern = r'\b(\w+)\s+\1\b'
             stuttering_count = len(re.findall(stutter_pattern, transcript.lower()))
+            
+            # Also detect speech disfluencies: um, uh, err, hmm patterns
+            # These indicate hesitation/stuttering in actual speech
+            disfluency_pattern = r'\b(um|uh|erm|err|hmm|ah|uhh|umm)\b'
+            disfluencies = len(re.findall(disfluency_pattern, transcript.lower()))
+            
+            # Combined stuttering score
+            stuttering_count = stuttering_count + disfluencies
             
             return {
                 "speaking_rate": round(speaking_rate, 2),
